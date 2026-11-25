@@ -1,0 +1,48 @@
+{
+  "name": "djsim",
+  "productName": "DJSIM",
+  "version": "1.0.0",
+  "description": "DJSIM by Raygun — a 3D music visualizer and crowd simulator that reacts to DJ sets",
+  "author": "Raygun",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac dmg zip --x64 --arm64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.raygun.djsim",
+    "productName": "DJSIM",
+    "copyright": "DJSIM by Raygun",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "package.json", "src/**/*", "build/icon.png"],
+    "afterPack": "build/afterPack.js",
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "build/icon.icns",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "DJSIM listens to your DJ mixer, audio interface or microphone so the crowd, lights and visuals can react to your set.",
+        "NSAudioCaptureUsageDescription": "DJSIM can capture system audio so the visuals react to music playing on your Mac.",
+        "NSCameraUsageDescription": "DJSIM does not use the camera.",
+        "CFBundleDisplayName": "DJSIM"
+      }
+    },
+    "dmg": {
+      "title": "DJSIM by Raygun",
+      "artifactName": "DJSIM-${version}-${arch}.${ext}",
+      "contents": [
+        { "x": 140, "y": 200 },
+        { "x": 400, "y": 200, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "zip": { "artifactName": "DJSIM-${version}-${arch}-mac.${ext}" }
+  }
+}
