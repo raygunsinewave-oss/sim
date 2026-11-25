@@ -9,12 +9,19 @@ permissions:
   contents: write
 
 concurrency:
-  group: build-macos
+  group: build-macos-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: macos-latest
+    # Two runner types in parallel: whichever gets a machine first publishes the release.
+    # Each one builds both Apple Silicon (arm64) and Intel (x64) apps.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15-intel, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -30,13 +37,21 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder --mac dmg zip --x64 --arm64 --publish never
 
-      - name: List build output
-        run: ls -la dist
+      - name: Verify app bundle
+        run: |
+          ls -la dist
+          for app in dist/mac*/DJSIM.app; do
+            echo "== $app"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleName" "$app/Contents/Info.plist"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$app/Contents/Info.plist"
+            codesign --verify --deep --strict "$app" && echo "signature OK"
+            lipo -archs "$app/Contents/MacOS/DJSIM"
+          done
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: DJSIM-macOS
+          name: DJSIM-macOS-${{ matrix.runner }}
           path: |
             dist/*.dmg
             dist/*.zip
@@ -49,8 +64,7 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "DJSIM by Raygun ${TAG}" --notes-file RELEASE_NOTES.md --latest --target "${GITHUB_SHA}"
-          else
-            gh release edit "$TAG" --notes-file RELEASE_NOTES.md --latest
+            gh release create "$TAG" --title "DJSIM by Raygun ${TAG}" --notes-file RELEASE_NOTES.md --latest --target "${GITHUB_SHA}" || true
           fi
+          gh release edit "$TAG" --notes-file RELEASE_NOTES.md --latest
           gh release upload "$TAG" dist/*.dmg dist/*.zip --clobber
