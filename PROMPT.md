@@ -33,7 +33,7 @@ Ship it as a downloadable macOS app (`.dmg`, Apple Silicon + Intel) published au
 - **Renderer:** Three.js (WebGL2) with post-processing (bloom, afterimage trails, film grain, optional glitch, chromatic aberration). Target 60 fps at 1080p on an M1 MacBook Air with 600 crowd members. Scale up to 2,000+ on faster machines.
 - **Audio:** Web Audio API. All analysis runs on the main thread from an `AnalyserNode`, or in an `AudioWorklet` if that is cheaper.
 - **Packaging:** `electron-builder` → `.dmg` + `.zip` for `arm64` and `x64`, ad-hoc code-signed in an `afterPack` hook so Apple Silicon will launch it. `Info.plist` must include `NSMicrophoneUsageDescription` and `NSAudioCaptureUsageDescription`.
-- **CI/CD:** GitHub Actions workflow on `macos-latest` that installs, packages, uploads artifacts, and creates/updates GitHub Release `v<version>` with the `.dmg` and `.zip` files attached. It runs on every push to `main`.
+- **CI/CD:** GitHub Actions workflow on hosted macOS runners (`macos-15-intel` and `macos-latest` in parallel) that installs, packages, uploads artifacts, and creates/updates GitHub Release `v<version>` with the `.dmg` and `.zip` files attached. It runs on every push to `main`.
 - **Code layout:** `main.js` (Electron), `preload.js` (safe bridge), `src/index.html`, `src/styles.css`, and `src/js/` modules: `audio`, `analysis`, `demo`, `songs`, `personas`, `crowd`, `environments`, `lights`, `lasers`, `visualizers`, `effects`, `dj`, `camera`, `presets`, `ui`, `app`. Three.js is vendored under `src/vendor/` so the app runs fully offline.
 
 ---
