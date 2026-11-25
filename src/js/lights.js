@@ -5,16 +5,16 @@ import { clamp, lerp, TAU } from './util.js';
 export const LIGHT_PATTERNS = ['Sweep', 'Fan', 'Ballyhoo', 'Circle', 'Figure 8', 'Crowd Scan', 'Center Hit', 'Chaos', 'Tilt Wave', 'Sky Pillars'];
 
 const BEAM_VERT = `
-varying float vAlong; varying vec3 vN; varying vec3 vV;
-void main(){ vAlong = -position.y / 40.0; vec4 mv = modelViewMatrix * vec4(position,1.0); vV = -mv.xyz; vN = normalMatrix * normal; gl_Position = projectionMatrix * mv; }`;
+varying float vAlong; varying vec3 vN; varying vec3 vV; varying float vDepth;
+void main(){ vDepth = -(modelViewMatrix * vec4(position,1.0)).z; vAlong = -position.y / 40.0; vec4 mv = modelViewMatrix * vec4(position,1.0); vV = -mv.xyz; vN = normalMatrix * normal; gl_Position = projectionMatrix * mv; }`;
 const BEAM_FRAG = `
 uniform vec3 uColor; uniform float uIntensity, uHaze;
-varying float vAlong; varying vec3 vN; varying vec3 vV;
+varying float vAlong; varying vec3 vN; varying vec3 vV; varying float vDepth;
 void main(){
   float facing = abs(dot(normalize(vN), normalize(vV)));
-  float core = pow(facing, 2.0);
-  float fall = pow(clamp(1.0 - vAlong, 0.0, 1.0), 1.6);
-  float a = core * fall * uIntensity * uHaze;
+  float core = pow(facing, 3.0);
+  float fall = pow(clamp(1.0 - vAlong, 0.0, 1.0), 2.0);
+  float a = core * fall * uIntensity * uHaze * smoothstep(1.5, 7.0, vDepth);
   gl_FragColor = vec4(uColor * a, 1.0);
 }`;
 
@@ -43,7 +43,7 @@ export class LightRig {
     this.group.add(this.hemi, this.key, this.key.target, this.blinderLight);
     this.strobeMeshes = []; this.blinderMeshes = [];
     this._q = new THREE.Quaternion(); this._down = new THREE.Vector3(0, -1, 0); this._v = new THREE.Vector3();
-    this.beamGeo = new THREE.CylinderGeometry(0.06, 1.0, 40, 20, 1, true);
+    this.beamGeo = new THREE.CylinderGeometry(0.05, 0.75, 40, 20, 1, true);
     this.beamGeo.translate(0, -20, 0);
     this._strobeT = 0;
   }
@@ -139,7 +139,7 @@ export class LightRig {
       if (sec === 'GROOVE' && pattern !== 6) I *= 0.6 + 0.4 * (Math.floor(beat) % 2 === h.i % 2 ? 1 : 0.3);
       if (sec === 'DROP') I *= 0.8 + A.kick * 0.6;
       if (sec === 'BREAKDOWN') I *= 0.6 + 0.4 * Math.sin(t * 0.8 + h.i);
-      h.mat.uniforms.uIntensity.value = this.enabled ? I * this.intensity * 0.55 : 0;
+      h.mat.uniforms.uIntensity.value = this.enabled ? I * this.intensity * 0.32 : 0;
       h.mat.uniforms.uHaze.value = this.haze;
       h.lens.material.color.copy(col).multiplyScalar(this.enabled ? 1 + I * 3 : 0.1);
       h.beam.visible = this.enabled;
@@ -148,7 +148,7 @@ export class LightRig {
     for (let i = 0; i < this.washes.length; i++) {
       const w = this.washes[i];
       w.color.copy(pal[(i + Math.floor(bar / 4)) % 3]);
-      w.intensity = (8 + 50 * A.bass * secI + (i === 2 ? 20 : 0)) * this.intensity;
+      w.intensity = (5 + 30 * A.bass * secI + (i === 2 ? 14 : 0)) * this.intensity;
     }
     this.hemi.color.copy(pal[2]).lerp(new THREE.Color('#ffffff'), 0.4);
     this.hemi.intensity = this.baseAmbient * (0.7 + A.level * 0.6);
@@ -168,7 +168,7 @@ export class LightRig {
     const bl = Math.max(this.blind, this._manualBlind || 0);
     this._manualBlind = (this._manualBlind || 0) * Math.exp(-dt * 3);
     for (const g of this.blinderMeshes) for (const d of g.children) d.material.color.setRGB(0.2 + bl * 8, 0.1 + bl * 5.5, 0.02 + bl * 2.5);
-    this.blinderLight.intensity = bl * 400 * fxLevel;
+    this.blinderLight.intensity = bl * 110 * fxLevel;
   }
 
   blinder() { this._manualBlind = 1; }

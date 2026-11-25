@@ -27,7 +27,7 @@ export class CameraDirector {
     const a = env.area, s = env.def.camDist || 1;
     const back = a.type === 'ring' ? 14 : a.zBack;
     this.home = { pos: new THREE.Vector3(0, 7 * s, (a.type === 'ring' ? 16 : back + 8) * (a.type === 'ring' ? 1 : 1)), tgt: new THREE.Vector3(0, 3, env.djPos.z + 2) };
-    if (a.type === 'ring') this.home = { pos: new THREE.Vector3(11, 5.5, 11), tgt: new THREE.Vector3(0, 1.2, 0) };
+    if (a.type === 'ring') this.home = { pos: new THREE.Vector3(7.5, 3.6, 7.5), tgt: new THREE.Vector3(0, 1.2, 0) };
     this.camera.position.copy(this.home.pos); this.controls.target.copy(this.home.tgt);
     this.curPos.copy(this.home.pos); this.curTgt.copy(this.home.tgt);
     this.controls.update();
@@ -49,7 +49,7 @@ export class CameraDirector {
     const el = t - this.shotStart;
     switch (shot) {
       case 0: // wide from the back, slow push in
-        if (ring) { P.set(Math.cos(t * 0.05) * 13, 6, Math.sin(t * 0.05) * 13); T.set(0, 1.2, 0); }
+        if (ring) { P.set(Math.cos(t * 0.05) * 9, 3.8, Math.sin(t * 0.05) * 9); T.set(0, 1.2, 0); }
         else { P.set(Math.sin(t * 0.07) * 6, 8 + Math.sin(t * 0.1), a.zBack + 9 - el * 0.4); T.set(0, 3, dj.z + 2); }
         break;
       case 1: // DJ close up from the side
@@ -59,11 +59,12 @@ export class CameraDirector {
       case 3: // low crowd angle looking up at the stage
         P.set(Math.sin(t * 0.2) * 3, 1.0, ring ? 6 : a.zFront + 3.5); T.set(0, 5, dj.z); break;
       case 4: // drone orbit
+        if (ring) { P.set(Math.cos(t * 0.12) * 8, 4.2, Math.sin(t * 0.12) * 8); T.set(0, 1, 0); break; }
         P.set(Math.cos(t * 0.12) * 24, 16 + Math.sin(t * 0.2) * 3, midZ + Math.sin(t * 0.12) * 24); T.set(0, 1, midZ - 3); break;
       case 5: // side truss
-        P.set((ring ? 9 : (a.x1 + 3)), 9, ring ? -3 : a.zFront + 4); T.set(0, 1.5, ring ? 2 : midZ); break;
+        P.set((ring ? 9 : (a.x1 + 3)), ring ? 4 : 9, ring ? -3 : a.zFront + 4); T.set(0, 1.5, ring ? 2 : midZ); break;
       case 6: // crane rise from crowd
-        P.set(-4 + el * 0.5, 2 + el * 1.5, ring ? 8 : midZ + 4); T.set(0, 3, dj.z + 2); break;
+        P.set(-4 + el * 0.5, ring ? Math.min(4.2, 2 + el * 0.4) : 2 + el * 1.5, ring ? 8 : midZ + 4); T.set(0, 3, dj.z + 2); break;
       case 7: // front of stage looking at crowd
         P.set(Math.sin(t * 0.15) * 5, 3.2, ring ? 3 : a.zFront - 1.2); T.set(0, 1.6, ring ? 10 : midZ + 4); break;
     }
@@ -101,7 +102,7 @@ export class CameraDirector {
     } else if (this.mode === 5) { this._shotPose(4, t, A, crowd); }
     else if (this.mode === 6) {
       const a = this.env.area; const ring = a.type === 'ring';
-      P.set(ring ? 0 : 0, ring ? 14 : 13, ring ? 16 : a.zBack + 14); T.set(0, 2, ring ? 0 : (a.zFront + this.env.djPos.z) / 2);
+      P.set(ring ? 0 : 0, ring ? 4.3 : 13, ring ? 10 : a.zBack + 14); T.set(0, 2, ring ? 0 : (a.zFront + this.env.djPos.z) / 2);
     } else if (this.mode === 7) {
       const id = this.followId;
       if (id >= 0 && id < crowd.count) {

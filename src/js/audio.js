@@ -34,6 +34,19 @@ export class AudioEngine extends Emitter {
     this.liveSource = null;
     this.track = { title: '—', artist: '', genre: null };
     this._mixTimer = setInterval(() => this._checkAutoMix(), 250);
+    this.onsetListeners = [];
+    this._initWorklet();
+  }
+
+  async _initWorklet() {
+    try {
+      await this.ctx.audioWorklet.addModule(new URL('./onset-worklet.js', import.meta.url));
+      this.onsetNode = new AudioWorkletNode(this.ctx, 'djsim-onset', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+      const sink = this.ctx.createGain(); sink.gain.value = 0;
+      this.inputGain.connect(this.onsetNode); this.onsetNode.connect(sink); sink.connect(this.ctx.destination);
+      this.onsetNode.port.onmessage = (e) => { for (const f of this.onsetListeners) f(e.data); };
+      this.workletReady = true;
+    } catch (e) { console.warn('Onset worklet unavailable, using frame-based analysis', e); this.workletReady = false; }
   }
 
   _makeDeck() {

@@ -103,7 +103,7 @@ export class DemoDJ {
         this._beginTrack(this.nextTime);
         continue;
       }
-      this._playStep(this.step, this.nextTime);
+      try { this._playStep(this.step, this.nextTime); } catch (e) { console.warn('demo step', e); }
       this.step++;
       this.nextTime += this.stepDur;
     }
@@ -221,6 +221,7 @@ export class DemoDJ {
 
   // ---------------- instruments ----------------
   _env(g, t, a, peak, d) {
+    peak = Math.max(peak, 0.0002);
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(peak, t + a);
     g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);

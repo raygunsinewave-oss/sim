@@ -5,7 +5,7 @@ import { TAU } from './util.js';
 const P_VERT = `
 attribute float aSize; attribute vec3 aColor; attribute float aAlpha;
 varying vec3 vColor; varying float vAlpha;
-void main(){ vColor = aColor; vAlpha = aAlpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = aSize * (300.0 / -mv.z); gl_Position = projectionMatrix * mv; }`;
+void main(){ vColor = aColor; vAlpha = aAlpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = min(aSize * (300.0 / -mv.z), 28.0); gl_Position = projectionMatrix * mv; }`;
 const P_FRAG = `
 varying vec3 vColor; varying float vAlpha;
 void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c); float a = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vColor * a * vAlpha, 1.0); }`;
@@ -186,12 +186,12 @@ function makeAmbient(type, area) {
     pos[i * 3] = cx + (Math.random() - 0.5) * R * 2; pos[i * 3 + 1] = Math.random() * H; pos[i * 3 + 2] = cz + (Math.random() - 0.5) * R * 2;
     seed[i] = Math.random();
     let c = [1, 1, 1], s = 0.25, a = 0.6;
-    if (type === 'snow') { s = 0.35; a = 0.8; }
+    if (type === 'snow') { s = 0.22; a = 0.45; }
     if (type === 'rain') { c = [0.6, 0.7, 0.9]; s = 0.18; a = 0.5; }
     if (type === 'sand') { c = [0.9, 0.7, 0.45]; s = 0.2; a = 0.35; }
     if (type === 'fireflies') { c = [1.4, 1.6, 0.4]; s = 0.4; a = 1; }
     if (type === 'ash') { c = Math.random() < 0.3 ? [3, 0.9, 0.2] : [0.4, 0.38, 0.35]; s = 0.25; a = 0.7; }
-    if (type === 'bubbles') { c = [0.6, 0.9, 1.2]; s = 0.5; a = 0.5; }
+    if (type === 'bubbles') { c = [0.5, 0.8, 1.0]; s = 0.35; a = 0.35; }
     if (type === 'stars') { c = [1, 1, 1.4]; s = 0.25; a = 0.7; }
     if (type === 'dust') { c = [0.8, 0.75, 0.7]; s = 0.15; a = 0.25; }
     if (type === 'confettiAmbient') { const h = new THREE.Color().setHSL(Math.random(), 1, 0.6); c = [h.r, h.g, h.b]; s = 0.25; a = 0.8; }

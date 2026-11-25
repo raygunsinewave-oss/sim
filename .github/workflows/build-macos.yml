@@ -2,7 +2,7 @@ name: Build DJSIM for macOS
 
 on:
   push:
-    branches: [main, ci-test]
+    branches: [main]
   workflow_dispatch:
 
 permissions:

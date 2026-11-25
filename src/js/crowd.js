@@ -55,7 +55,7 @@ const PART_DEFS = [
   ['farmL', () => capsule(0.043, 0.21)], ['farmR', () => capsule(0.043, 0.21)],
   ['thighL', () => capsule(0.078, 0.3)], ['thighR', () => capsule(0.078, 0.3)],
   ['shinL', () => capsule(0.062, 0.33)], ['shinR', () => capsule(0.062, 0.33)],
-  ['hat', () => { const g = new THREE.CylinderGeometry(0.115, 0.125, 0.08, 10); return g; }],
+  ['hat', () => { const g = new THREE.CylinderGeometry(0.1, 0.112, 0.07, 10); return g; }],
   ['cup', () => { const g = new THREE.CylinderGeometry(0.04, 0.034, 0.12, 8); g.translate(0, 0.02, 0); return g; }]
 ];
 const GLOW_DEFS = [
@@ -67,12 +67,12 @@ const BUILD_W = { slim: 0.88, average: 1, broad: 1.13, heavy: 1.3 };
 
 function rimMaterial(opts) {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05, ...opts });
-  m.userData.rim = { uRimColor: { value: new THREE.Color('#5a7bff') }, uRimStrength: { value: 0.8 } };
+  m.userData.rim = { uRimColor: { value: new THREE.Color('#5a7bff') }, uRimStrength: { value: 0.8 }, uSelf: { value: 0.18 } };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, m.userData.rim);
-    sh.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRimStrength;\n' + sh.fragmentShader.replace(
+    sh.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRimStrength;\nuniform float uSelf;\n' + sh.fragmentShader.replace(
       '#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\n float rimF = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 2.2);\n totalEmissiveRadiance += uRimColor * rimF * uRimStrength;'
+      '#include <emissivemap_fragment>\n float rimF = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 2.2);\n totalEmissiveRadiance += uRimColor * rimF * uRimStrength + diffuseColor.rgb * uSelf;'
     );
   };
   return m;
@@ -218,7 +218,7 @@ export class Crowd {
     for (const k in M) if (M[k].instanceColor) M[k].instanceColor.needsUpdate = true;
   }
 
-  setRim(color, strength) { this.mat.userData.rim.uRimColor.value.copy(color); this.mat.userData.rim.uRimStrength.value = strength; }
+  setRim(color, strength, self = 0.18) { const r = this.mat.userData.rim; r.uRimColor.value.copy(color); r.uRimStrength.value = strength; r.uSelf.value = self; }
 
   // ---------- events from the music ----------
   onDrop(A, intensity) {
@@ -283,7 +283,7 @@ export class Crowd {
     else { x = lerp(a.x0, a.x1, 0.35 + this.rng() * 0.3); z = lerp(a.zFront, a.zBack, 0.35 + this.rng() * 0.2); }
     Object.assign(this.mosh, { active: true, type, x, z, r: 0, target: type === 'mosh' ? 3.2 : 1.6, until: this.time + (type === 'mosh' ? 40 : 28), dancer, go: type === 'circle' });
     if (dancer >= 0) { this._log(dancer, 'circle', {}, true); this.people[dancer].goal.id === 'circle' && (this.people[dancer].goal.done = true); }
-    this.emitTicker(type === 'mosh' ? 'A mosh pit is opening up in the middle of the crowd!' : `A dance circle opened around ${this.people[dancer].name.split(' ')[0]}!`);
+    this.emitTicker(type === 'mosh' ? 'A mosh pit is opening up in the middle of the crowd!' : `A dance circle opened around ${this.people[dancer].name.split(' ')[0]}!`, dancer, true);
   }
 
   _startRide(i) {
@@ -319,7 +319,8 @@ export class Crowd {
       const know = isTheirs ? 1 : clamp((p.taste[canonGenre(song.genre)] || 0.3) * 0.9 + 0.35 - (p.arch === 'tourist' || p.arch === 'kpopstan' ? 0.25 : 0) - (p.arch === 'purist' ? 0.3 : 0), 0, 1);
       if (this.rng() > know && !isTheirs) { if (this.rng() < 0.01) this._log(i, 'unknownanthem', { song: song.title }); continue; }
       s.reactAt = this.time + (isTheirs ? 0.1 : 0.5) + dist * 0.05 + this.rng() * 1.5;
-      s.reactMove = isTheirs ? this.rng.pick(['handsup', 'jump', 'singalong', p.traits.phone > 0.5 ? 'phone' : 'hug']) : REACTION_MOVE[song.reaction] || 'handsup';
+      s.reactMove = isTheirs ? this.rng.pick(['handsup', 'jump', 'singalong', p.traits.phone > 0.5 ? 'phone' : 'hug'])
+        : this.rng() < 0.65 ? (REACTION_MOVE[song.reaction] || 'handsup') : this.rng.pick(['singalong', 'handsup', 'jump', 'fistpump', p.props.phone ? 'phone' : 'clap', 'bounce']);
       s.reactUntil = s.reactAt + 20 + this.rng() * 25;
       p.mood = clamp(p.mood + (isTheirs ? 0.35 : 0.12), 0, 1);
       p.energy = clamp(p.energy + (isTheirs ? 0.4 : 0.15), 0, 1.2);
@@ -328,7 +329,7 @@ export class Crowd {
         if (p.goal.id === 'propose' && p.partner != null && !p.goal.done) {
           p.goal.done = true;
           this._log(i, 'propose', { friendId: p.partner, song: song.title }, true);
-          this.emitTicker(`💍 ${p.name.split(' ')[0]} just proposed to ${this.people[p.partner].name.split(' ')[0]} during "${song.title}"!`);
+          this.emitTicker(`💍 ${p.name.split(' ')[0]} just proposed to ${this.people[p.partner].name.split(' ')[0]} during "${song.title}"!`, i, true);
         } else this._log(i, 'theirsong', { song: song.title }, true);
       } else if (this.rng() < 0.02) this._log(i, 'anthem', { song: song.title });
     }
@@ -455,15 +456,15 @@ export class Crowd {
       return;
     }
     // lost friend storyline
-    if (p.goal.id === 'friend' && !p.goal.done && p.friends.length && rng() < 0.004) {
+    if (p.goal.id === 'friend' && !p.goal.done && p.friends.length && rng() < 0.0007) {
       p.goal.done = true; const f = p.friends[0];
       this._log(i, 'found', { friendId: f }, true);
       s.partner = f; this._setMove(s, 'hug', 6); return;
     }
-    if (p.goal.id === 'newfriend' && !p.goal.done && rng() < 0.002) { p.goal.done = true; this._log(i, 'newfriend', {}, true); }
+    if (p.goal.id === 'newfriend' && !p.goal.done && rng() < 0.0005) { p.goal.done = true; this._log(i, 'newfriend', {}, true); }
     if (p.goal.id === 'dj' && !p.goal.done && A.sinceDrop < 4 && rng() < 0.01) { p.goal.done = true; this._log(i, 'djeye', {}, true); }
-    if (p.goal.id === 'barrier' && !p.goal.done && this.area.type !== 'ring' && rng() < 0.003) {
-      p.goal.done = true; s.hz = lerp(s.hz, this.area.zFront, 0.8); this._log(i, 'drop', {}, true);
+    if (p.goal.id === 'barrier' && !p.goal.done && this.area.type !== 'ring' && rng() < 0.0006) {
+      p.goal.done = true; s.hz = lerp(s.hz, this.area.zFront, 0.8); this._log(i, 'barrier', {}, true);
     }
 
     // still holding a reaction or a move?
@@ -512,7 +513,12 @@ export class Crowd {
     if (p.log.length > 60) p.log.shift();
     if (important || i === this.followId) this.emitTicker(`${p.name.split(' ')[0]}: ${text}`, i);
   }
-  emitTicker(text, id = -1) { if (this.onStory) this.onStory(text, id); }
+  emitTicker(text, id = -1, force = false) {
+    if (!this.onStory) return;
+    if (!force && id >= 0 && id !== this.followId && this.time - (this._lastTick || -99) < 5) return;
+    this._lastTick = this.time;
+    this.onStory(text, id);
+  }
 
   // ---------- pose ----------
   _pose(i, p, s, A, time) {
@@ -632,8 +638,8 @@ export class Crowd {
     return best;
   }
 
-  getHead(i, out) { const s = this.st[i]; return out.set(s.x, s.headY || 1.6, s.z); }
-  getYaw(i) { return this.st[i].yaw; }
+  getHead(i, out) { const s = this.st[i]; if (!s) return out.set(0, 1.6, 0); return out.set(s.x, s.headY || 1.6, s.z); }
+  getYaw(i) { return this.st[i] ? this.st[i].yaw : 0; }
   describe(i) { const s = this.st[i]; return { move: MOVE_LABELS[s.move] || s.move, mode: s.mode }; }
   randomInteresting() {
     const pool = [];

@@ -22,6 +22,8 @@ export class Analyzer {
     this.midA = Math.floor(1000 / binHz); this.midB = Math.ceil(5000 / binHz);
     this.binHz = binHz;
     this.bandRaw = new Float32Array(7);
+    this.bandLin = new Float32Array(7);
+    this._minDb = this.an.minDecibels; this._rangeDb = this.an.maxDecibels - this.an.minDecibels;
     this.bandMax = new Float32Array(7).fill(0.05);
     this.bands = new Float32Array(7);
     this.bandsSlow = new Float32Array(7);
@@ -42,14 +44,21 @@ export class Analyzer {
     this._fluxHist = []; this._lowFluxHist = []; this._midFluxHist = []; this._hiFluxHist = [];
     this._lastOnset = 0; this._lastKick = 0; this._lastSnare = 0; this._lastHat = 0;
     this._bpmHist = []; this._tempoT = 0;
-    this._bassFast = 0; this._bassSlow = 0; this._bassRef = 0.3; this._hiFast = 0; this._hiSlow = 0; this._levelSlow = 0; this._levelMax = 0.05;
+    this._bassFast = 0; this._bassSlow = 0; this._bassRef = 0.05; this._hiFast = 0; this._hiSlow = 0; this._levelSlow = 0; this._levelMax = 0.05;
     this._gapT = 0; this._buildT = 0; this._onsetRate = 0; this._kickRate = 0; this._hatRate = 0;
     this._prevBeatInt = 0;
     this._hintSection = null;
     this.events = [];
+    // audio-thread envelope (preferred)
+    this._wEnv = new Float32Array(2048); this._wIdx = 0; this._wCount = 0; this._wRate = 172; this._wLastT = 0;
+    engine.onsetListeners.push((d) => {
+      this._wRate = d.rate;
+      for (let i = 0; i < d.v.length; i++) { this._wEnv[this._wIdx] = d.v[i]; this._wIdx = (this._wIdx + 1) % this._wEnv.length; this._wCount++; }
+      this._wLastT = d.t;
+    });
   }
 
-  reset() { this.section = 'INTRO'; this.sectionTime = 0; this._gapT = 0; this._buildT = 0; this.beats = 0; this._bpmHist = []; this.genreScores = Object.fromEntries(GENRES.map((g) => [g, 0])); }
+  reset() { this.section = 'INTRO'; this.sectionTime = 0; this._gapT = 0; this._buildT = 0; this._bpmHist = []; this._bassRef = 0.05; this.genreScores = Object.fromEntries(GENRES.map((g) => [g, 0])); }
 
   update(dt, hint) {
     dt = Math.min(dt, 0.1);
@@ -76,14 +85,15 @@ export class Analyzer {
     this._levelMax = Math.max(this.rms, this._levelMax * Math.exp(-dt / 30), 0.02);
     const levelNorm = clamp(this.rms / this._levelMax, 0, 1.2);
     this.level = smooth(this.level, levelNorm, 12, dt);
-    this.silent = this.rms < 0.004;
+    this.silent = this.rms < 0.0015;
 
     // bands
     for (let b = 0; b < 7; b++) {
       const [a, c] = this.bandBins[b];
-      let s = 0; for (let k = a; k < c && k < n; k++) { const v = fft[k] / 255; s += v * v; }
+      let s = 0, lin = 0; for (let k = a; k < c && k < n; k++) { const v = fft[k] / 255; s += v * v; lin += Math.pow(10, (this._minDb + v * this._rangeDb) / 10); }
       const v = s / Math.max(1, c - a);
       this.bandRaw[b] = v;
+      this.bandLin[b] = lin / Math.max(1, c - a);
       this.bandMax[b] = Math.max(v, this.bandMax[b] * Math.exp(-dt / 20), 0.01);
       const norm = clamp(v / this.bandMax[b], 0, 1);
       this.bands[b] = norm > this.bands[b] ? norm : smooth(this.bands[b], norm, 10, dt);
@@ -141,15 +151,25 @@ export class Analyzer {
       this.beats = hint.beats;
       if (this.beats < prevBeats - 1) this._prevBeatInt = Math.floor(this.beats) - 1; // new track
     } else {
-      // onset envelope at 100 Hz
-      const envV = flux + low * 0.5;
-      this._envAcc += dt;
-      while (this._envAcc >= 0.01) { this._env[this._envIdx] = envV; this._envIdx = (this._envIdx + 1) % this._env.length; this._envAcc -= 0.01; }
+      const useW = this.engine.workletReady && this._wCount > 400;
+      if (!useW) {
+        // fallback: onset envelope at 100 Hz from frames
+        const envV = flux + low * 0.5;
+        this._envAcc += dt;
+        while (this._envAcc >= 0.01) { this._env[this._envIdx] = envV; this._envIdx = (this._envIdx + 1) % this._env.length; this._envAcc -= 0.01; }
+      }
       this._tempoT += dt;
-      if (this._tempoT > 0.5) { this._tempoT = 0; this._estimateTempo(); }
-      // beat PLL
+      if (this._tempoT > 0.5) { this._tempoT = 0; if (useW) this._estimateTempoW(); else this._estimateTempo(); }
+      // beat clock
       this.beats += dt * this.bpm / 60;
-      if (kickHit || (this.onset && this.time - this._lastKick > 1.5)) {
+      if (useW && this._phaseRef != null) {
+        // lock phase to the comb-filter estimate measured on the audio thread
+        const now = this.engine.ctx.currentTime;
+        const ph = (((now - this._phaseRef) * this.bpm / 60) % 1 + 1) % 1;
+        let err = ph - (this.beats - Math.floor(this.beats));
+        if (err > 0.5) err -= 1; if (err < -0.5) err += 1;
+        this.beats += err * Math.min(1, dt * 4);
+      } else if (kickHit || (this.onset && this.time - this._lastKick > 1.5)) {
         const frac = this.beats - Math.round(this.beats);
         if (Math.abs(frac) < 0.3) this.beats -= frac * (kickHit ? 0.25 : 0.1);
       }
@@ -169,10 +189,11 @@ export class Analyzer {
     if (this.beat && bi % 32 === 0) this.events.push('phrase');
 
     // ---------- sections ----------
-    this._bassFast = smooth(this._bassFast, this.bandRaw[0] + this.bandRaw[1], 4, dt);
-    this._bassSlow = smooth(this._bassSlow, this.bandRaw[0] + this.bandRaw[1], 0.12, dt);
-    this._hiFast = smooth(this._hiFast, this.bandRaw[4] + this.bandRaw[5] + this.bandRaw[6], 1.2, dt);
-    this._hiSlow = smooth(this._hiSlow, this.bandRaw[4] + this.bandRaw[5] + this.bandRaw[6], 0.15, dt);
+    const bassLin = Math.sqrt(this.bandLin[0] + this.bandLin[1]) * 1000, hiLin = Math.sqrt(this.bandLin[4] + this.bandLin[5] + this.bandLin[6]) * 1000;
+    this._bassFast = smooth(this._bassFast, bassLin, 4, dt);
+    this._bassSlow = smooth(this._bassSlow, bassLin, 0.12, dt);
+    this._hiFast = smooth(this._hiFast, hiLin, 1.2, dt);
+    this._hiSlow = smooth(this._hiSlow, hiLin, 0.15, dt);
     this._levelSlow = smooth(this._levelSlow, this.rms, 0.2, dt);
     const prevSection = this.section;
     this.sectionTime += dt;
@@ -183,16 +204,16 @@ export class Analyzer {
         const was = this._hintSection;
         this._hintSection = hint.section;
         this.section = hint.section; this.sectionTime = 0;
-        if (hint.section === 'DROP') this._fireDrop(was === 'BUILDUP' ? 1 : 0.7);
+        if (hint.section === 'DROP' && was !== '__forced') this._fireDrop(was === 'BUILDUP' ? 1 : 0.7);
       }
       this.buildProgress = hint.section === 'BUILDUP' ? clamp(hint.sectionPos, 0, 1) : 0;
     } else {
-      if (this.section === 'GROOVE' || this.section === 'DROP') this._bassRef = Math.max(this._bassRef * Math.exp(-dt / 40), this._bassFast * 0.95, 0.02);
+      if (this.section !== 'BREAKDOWN' && this.section !== 'BUILDUP') this._bassRef = Math.max(this._bassRef * Math.exp(-dt / 40), this._bassFast * 0.95, 0.05);
       const bassRatio = this._bassFast / Math.max(this._bassRef, 1e-3);
       if (bassRatio < 0.38 && !this.silent) this._gapT += dt; else if (bassRatio > 0.6) this._gapT = Math.max(0, this._gapT - dt * 3);
       switch (this.section) {
         case 'INTRO':
-          if (bassRatio > 0.6 && this.sectionTime > 6 && this.level > 0.4) this._setSection('GROOVE');
+          if (bassRatio > 0.55 && this.sectionTime > 4 && this.level > 0.3) this._setSection('GROOVE');
           break;
         case 'GROOVE':
         case 'DROP':
@@ -235,11 +256,55 @@ export class Analyzer {
     this.dropTime = this.time; this.dropIntensity = intensity;
     this.events.push('drop');
     // align bars: drops land on a downbeat
-    if (!this._hintSection) this.beats = Math.round(this.beats / 4) * 4 + (this.beats % 1 > 0.5 ? 0 : 0);
+    if (!this._hintSection) this.beats = Math.round(this.beats / 4) * 4;
   }
 
   // manual drop (keyboard)
-  forceDrop() { this._fireDrop(1); this.drop = true; }
+  forceDrop() { this._fireDrop(1); this.drop = true; if (this._hintSection) this._hintSection = '__forced'; }
+
+  _estimateTempoW() {
+    const rate = this._wRate, L = this._wEnv.length;
+    const N = Math.min(this._wCount, Math.floor(rate * 8), L);
+    const x = new Float32Array(N);
+    let mean = 0;
+    for (let i = 0; i < N; i++) { x[i] = this._wEnv[(this._wIdx - N + i + L * 2) % L]; mean += x[i]; }
+    mean /= N;
+    let energy = 0;
+    for (let i = 0; i < N; i++) { x[i] = Math.max(0, x[i] - mean); energy += x[i] * x[i]; }
+    if (energy < 1e-6) return;
+    const minLag = Math.floor(rate * 60 / 180), maxLag = Math.ceil(rate * 60 / 70);
+    const ac = new Float32Array(maxLag * 2 + 3);
+    const accum = (lag) => { let s = 0; for (let i = lag; i < N; i++) s += x[i] * x[i - lag]; return s / energy; };
+    for (let lag = minLag - 1; lag <= Math.min(maxLag * 2 + 1, N - 2); lag++) ac[lag] = accum(lag);
+    let best = -1, bestV = -1e9;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      const bpm = rate * 60 / lag;
+      const w = Math.exp(-0.5 * Math.pow(Math.log2(bpm / 125) / 0.6, 2));
+      const v = (ac[lag] + 0.5 * (ac[lag * 2] || 0)) * (0.55 + w);
+      if (v > bestV && ac[lag] >= ac[lag - 1] && ac[lag] >= ac[lag + 1]) { bestV = v; best = lag; }
+    }
+    if (best < 0) return;
+    const y0 = ac[best - 1], y1 = ac[best], y2 = ac[best + 1];
+    const den = (y0 - 2 * y1 + y2);
+    const off = den !== 0 ? clamp((y0 - y2) / (2 * den), -0.5, 0.5) : 0;
+    const period = best + off;
+    const bpm = rate * 60 / period;
+    this.bpmConf = clamp(ac[best] * 1.5, 0, 1);
+    this._bpmHist.push(bpm); if (this._bpmHist.length > 7) this._bpmHist.shift();
+    const sorted = [...this._bpmHist].sort((a, b) => a - b);
+    const med = sorted[Math.floor(sorted.length / 2)];
+    if (this.bpmConf > 0.05) this.bpm = Math.abs(med - this.bpm) > 4 ? med : smooth(this.bpm, med, 3, 0.5);
+    // comb filter for beat phase: find offset of the most recent beat
+    const P = rate * 60 / this.bpm;
+    let bestO = 0, bestS = -1;
+    for (let o = 0; o < Math.floor(P); o++) {
+      let sc = 0;
+      for (let k = 0; k < 12; k++) { const idx = N - 1 - Math.round(o + k * P); if (idx < 1) break; sc += x[idx] + 0.5 * (x[idx - 1] + x[idx + 1 < N ? idx + 1 : idx]); }
+      if (sc > bestS) { bestS = sc; bestO = o; }
+    }
+    const tLast = this._wLastT;
+    this._phaseRef = tLast - bestO / rate;
+  }
 
   _estimateTempo() {
     const N = 600, env = this._env, L = env.length;

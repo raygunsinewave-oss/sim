@@ -1,1 +1,187 @@
-<!doctype html><html><head><meta charset="utf-8"><title>DJSIM by Raygun</title></head><body style="background:#000;color:#0ff;font-family:sans-serif"><h1>DJSIM — packaging test</h1><script type="module">import * as THREE from './vendor/three/three.module.js'; document.body.insertAdjacentHTML('beforeend','<p>three r'+THREE.REVISION+'</p>');</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DJSIM by Raygun</title>
+  <link rel="icon" href="icon-256.png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+  { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <!-- splash -->
+  <div id="splash">
+    <img src="icon-256.png" alt="" class="splash-icon">
+    <div class="splash-word">DJSIM</div>
+    <div class="splash-by">by Raygun</div>
+    <button id="startBtn" class="btn big">Enter the club</button>
+    <div class="splash-hint">Headphones or speakers on. Press <kbd>H</kbd> any time for shortcuts.</div>
+  </div>
+
+  <!-- top bar -->
+  <header id="topbar" class="glass">
+    <div class="brand"><img src="icon-256.png" alt=""><span class="word">DJSIM</span><span class="by">by Raygun</span></div>
+    <div class="sources" id="sources">
+      <button data-src="demo" class="seg active" title="Built-in procedural DJ set">Demo DJ</button>
+      <button data-src="files" class="seg" title="Play audio files (drag &amp; drop or ⌘O)">Files</button>
+      <button data-src="live" class="seg" title="Mixer, interface or microphone">Live Input</button>
+      <button data-src="system" class="seg" title="Capture Mac audio (experimental)">System Audio</button>
+    </div>
+    <div class="nowplaying">
+      <div class="np-title" id="npTitle">—</div>
+      <div class="np-artist" id="npArtist"></div>
+    </div>
+    <div class="readouts">
+      <div class="ro"><span class="lbl">BPM</span><span id="roBpm" class="val">---</span></div>
+      <div class="ro"><span class="lbl">GENRE</span><span id="roGenre" class="val">---</span></div>
+      <div class="ro"><span class="lbl">SECTION</span><span id="roSection" class="val badge">INTRO</span></div>
+      <div class="ro energy"><span class="lbl">ENERGY</span><div class="meter"><div id="roEnergy"></div></div></div>
+      <div class="ro"><span class="lbl">CLOCK</span><span id="roClock" class="val">22:00</span></div>
+    </div>
+    <div class="topbtns">
+      <button class="icon" id="btnLeft" title="Worlds &amp; presets">🌐</button>
+      <button class="icon" id="btnRight" title="Show controls">🎛️</button>
+      <button class="icon" id="btnHelp" title="Shortcuts (H)">?</button>
+      <button class="icon" id="btnFull" title="Fullscreen">⛶</button>
+    </div>
+  </header>
+
+  <!-- left drawer -->
+  <aside id="left" class="drawer glass open">
+    <div class="tabs"><button data-tab="worlds" class="active">Worlds</button><button data-tab="presets">Presets</button><button data-tab="palettes">Palettes</button></div>
+    <div class="tab-body" data-body="worlds"><div id="worldGrid" class="grid worlds"></div></div>
+    <div class="tab-body hidden" data-body="presets">
+      <div class="row"><button class="btn" id="savePreset">Save current look</button><button class="btn ghost" id="exportPresets">Export</button><label class="btn ghost">Import<input type="file" id="importPresets" accept=".json" hidden></label></div>
+      <div id="customPresets" class="list"></div>
+      <div class="sub">Built-in</div>
+      <div id="presetList" class="list"></div>
+    </div>
+    <div class="tab-body hidden" data-body="palettes"><div id="paletteGrid" class="grid palettes"></div></div>
+  </aside>
+
+  <!-- right drawer -->
+  <aside id="right" class="drawer glass open">
+    <div class="tabs"><button data-tab="show" class="active">Show</button><button data-tab="crowd">Crowd</button><button data-tab="settings">Settings</button></div>
+    <div class="tab-body" data-body="show">
+      <div class="sub">Trigger <span class="hint">(keys)</span></div>
+      <div class="fxgrid">
+        <button class="fx drop" data-fx="drop">DROP<kbd>Space</kbd></button>
+        <button class="fx" data-fx="strobe">Strobe<kbd>S</kbd></button>
+        <button class="fx" data-fx="blinder">Blinders<kbd>B</kbd></button>
+        <button class="fx" data-fx="pyro">Pyro<kbd>P</kbd></button>
+        <button class="fx" data-fx="co2">CO2<kbd>X</kbd></button>
+        <button class="fx" data-fx="confetti">Confetti<kbd>C</kbd></button>
+        <button class="fx" data-fx="fireworks">Fireworks<kbd>W</kbd></button>
+        <button class="fx" data-fx="sparks">Sparks<kbd>Z</kbd></button>
+      </div>
+      <div class="row toggles">
+        <label class="tog"><input type="checkbox" id="autoVJ" checked><span>Auto-VJ</span></label>
+        <label class="tog"><input type="checkbox" id="autoFX" checked><span>Auto FX on drops</span></label>
+        <label class="tog"><input type="checkbox" id="lasersOn" checked><span>Lasers</span></label>
+        <label class="tog"><input type="checkbox" id="lightsOn" checked><span>Lights</span></label>
+      </div>
+      <div class="sub">LED wall visual <span class="hint">(V)</span></div>
+      <div id="visGrid" class="chips"></div>
+      <div class="sub">Laser mode <span class="hint">(K)</span></div>
+      <div id="laserGrid" class="chips"></div>
+      <div class="row"><span class="lbl">Laser colour</span><select id="laserColor"><option value="0">Palette</option><option value="1">Classic green</option><option value="2">RGB</option><option value="3">Rainbow</option></select></div>
+      <div class="sub">Moving-head pattern <span class="hint">(M)</span></div>
+      <div id="lightGrid" class="chips"></div>
+      <div class="row"><span class="lbl">Light colour</span><select id="lightColor"><option value="0">Palette spread</option><option value="1">Unison</option><option value="2">Chase</option></select></div>
+      <div class="sub">Camera <span class="hint">(0 = cinematic)</span></div>
+      <div id="camGrid" class="chips"></div>
+      <div class="sub">MC shout-out on the LED wall</div>
+      <div class="row"><input id="mcText" type="text" maxlength="40" placeholder="MAKE SOME NOISE!"><button class="btn" id="mcSend">Show</button></div>
+    </div>
+    <div class="tab-body hidden" data-body="crowd">
+      <div class="stats" id="crowdStats"></div>
+      <div class="row"><button class="btn" id="randomStory">🎲 Random story <kbd>R</kbd></button><button class="btn ghost" id="followBtn">Follow cam <kbd>G</kbd></button></div>
+      <div class="sub">Crowd size <span id="crowdSizeVal" class="hint"></span></div>
+      <input type="range" id="crowdSize" min="100" max="2500" step="50">
+      <div class="sub">Tell the crowd what's playing <span class="hint">(for live sets)</span></div>
+      <div class="row"><input id="tagSearch" type="text" placeholder="Search anthems… e.g. Levels"></div>
+      <div id="tagResults" class="list compact"></div>
+      <div class="sub">Live moments</div>
+      <div id="momentLog" class="log"></div>
+    </div>
+    <div class="tab-body hidden" data-body="settings">
+      <div class="set"><span>Quality</span><select id="quality"><option value="0">Low</option><option value="1">Medium</option><option value="2" selected>High</option><option value="3">Ultra</option></select></div>
+      <div class="set"><label class="tog"><input type="checkbox" id="autoQuality" checked><span>Auto-quality</span></label></div>
+      <div class="set"><span>Bloom</span><input type="range" id="bloom" min="0" max="2.5" step="0.05" value="1"></div>
+      <div class="set"><span>Trails</span><input type="range" id="trails" min="0" max="0.9" step="0.05" value="0.35"></div>
+      <div class="set"><span>Film grain</span><input type="range" id="grain" min="0" max="0.2" step="0.01" value="0.05"></div>
+      <div class="set"><span>Haze / fog</span><input type="range" id="fog" min="0" max="2.5" step="0.05" value="1"></div>
+      <div class="set"><span>FX intensity</span><input type="range" id="fxLevel" min="0" max="1.5" step="0.05" value="1"></div>
+      <div class="set"><span>Glitch on drops</span><label class="tog"><input type="checkbox" id="glitch" checked><span></span></label></div>
+      <div class="set"><span>Beat sensitivity</span><input type="range" id="sens" min="0.5" max="2" step="0.05" value="1"></div>
+      <div class="set"><span>Input gain</span><input type="range" id="gain" min="0.2" max="4" step="0.05" value="1"></div>
+      <div class="set"><span>Latency offset <em id="latVal">0 ms</em></span><input type="range" id="latency" min="-200" max="200" step="5" value="0"></div>
+      <div class="set"><span>Monitor volume</span><input type="range" id="volume" min="0" max="1" step="0.01" value="0.85"></div>
+      <div class="set"><span>Live input device</span><select id="deviceSelect"><option value="">Default input</option></select></div>
+      <div class="sub">About</div>
+      <p class="about">DJSIM by Raygun <span id="ver"></span>. A 3D DJ-set visualizer with a living crowd. Every person has a name, a story and a taste in music.</p>
+    </div>
+  </aside>
+
+  <!-- deck strip -->
+  <footer id="deck" class="glass">
+    <div class="transport">
+      <button class="icon" id="tPrev" title="Restart / previous">⏮</button>
+      <button class="icon" id="tPlay" title="Play / pause">⏯</button>
+      <button class="icon" id="tNext" title="Next track (mix)">⏭</button>
+    </div>
+    <div class="deckinfo">
+      <div class="progress" id="progress"><div id="progressFill"></div></div>
+      <div class="deckmeta"><span id="deckMode">Demo DJ</span><span id="deckTime"></span></div>
+    </div>
+    <label class="tog small"><input type="checkbox" id="autoMix" checked><span>Auto-mix</span></label>
+    <select id="playlistSel" title="Playlist"></select>
+    <button class="btn ghost" id="openFiles">Add music…</button>
+    <input type="file" id="fileInput" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.aiff" multiple hidden>
+  </footer>
+
+  <!-- ticker -->
+  <div id="ticker"></div>
+
+  <!-- selected person label & story card -->
+  <div id="pin" class="hidden"><div class="pin-name"></div><div class="pin-act"></div></div>
+  <div id="story" class="glass hidden">
+    <button class="close" id="storyClose">✕</button>
+    <div class="st-head"><div class="st-name" id="stName"></div><div class="st-meta" id="stMeta"></div><div class="st-arch" id="stArch"></div></div>
+    <div class="st-back" id="stBack"></div>
+    <div class="st-goal" id="stGoal"></div>
+    <div class="st-meters" id="stMeters"></div>
+    <div class="st-row"><span class="lbl">Now</span><span id="stNow"></span></div>
+    <div class="st-row"><span class="lbl">Loves</span><span id="stTaste"></span></div>
+    <div class="st-row"><span class="lbl">Their song</span><span id="stSong"></span></div>
+    <div class="st-row"><span class="lbl">With</span><span id="stFriends"></span></div>
+    <div class="st-log" id="stLog"></div>
+    <div class="row"><button class="btn" id="stFollow">Follow</button><button class="btn ghost" id="stPov">Their POV</button></div>
+  </div>
+
+  <!-- banners & overlays -->
+  <div id="banner"></div>
+  <div id="toast"></div>
+  <div id="dropzone" class="hidden"><div>Drop your tracks to start the set</div></div>
+  <div id="tip" class="glass hidden"></div>
+  <div id="help" class="glass hidden">
+    <h2>DJSIM shortcuts</h2>
+    <div class="cols">
+      <div><kbd>Space</kbd> Trigger a drop</div><div><kbd>S</kbd> Strobe (hold)</div><div><kbd>B</kbd> Blinders</div><div><kbd>P</kbd> Pyro</div>
+      <div><kbd>X</kbd> CO2 jets</div><div><kbd>C</kbd> Confetti</div><div><kbd>W</kbd> Fireworks</div><div><kbd>Z</kbd> Sparks</div>
+      <div><kbd>V</kbd> Next LED visual</div><div><kbd>K</kbd> Next laser mode</div><div><kbd>M</kbd> Next light pattern</div><div><kbd>L</kbd> Lasers on/off</div>
+      <div><kbd>E</kbd> Next world</div><div><kbd>1–9</kbd> Presets</div><div><kbd>F</kbd> More haze</div><div><kbd>N</kbd> Next palette</div>
+      <div><kbd>R</kbd> Random story</div><div><kbd>G</kbd> Follow selected</div><div><kbd>0</kbd> Cinematic camera</div><div><kbd>C</kbd>+<kbd>Shift</kbd> Free camera</div>
+      <div><kbd>Tab</kbd> Hide interface</div><div><kbd>J</kbd> Auto-VJ</div><div><kbd>T</kbd> Next track</div><div><kbd>H</kbd> This help</div>
+    </div>
+    <p>Click a person to read their story. Click the LED wall to change visuals. Click a laser to change its mode. Double-click the stage for a drop.</p>
+    <button class="btn" id="helpClose">Got it</button>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

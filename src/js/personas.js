@@ -240,6 +240,7 @@ const EV = {
   djeye: ['The DJ pointed at {obj}. Best moment of {pos} life.'],
   genrelove: ['Loving this {genre}. Exactly {pos} thing.', 'This {genre} section is incredible.'],
   genremeh: ['Not really feeling the {genre}. Chatting with {friend} instead.', 'Waiting for the DJ to switch it up from {genre}.'],
+  barrier: ['Made it all the way to the barrier! Front row.', 'Squeezed through to the barrier. Worth every elbow.'],
   leave: ['Heading home. What a night.', 'Left to catch the last train, still humming the drop.']
 };
 

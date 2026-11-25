@@ -6,7 +6,8 @@ export const LASER_MODES = ['Fan Sweep', 'Tunnel', 'Liquid Sky', 'Crossfire', 'S
 const BEAMS = 14;
 
 const SHEET_FRAG = `varying vec2 vUv; uniform float uTime, uI; uniform vec3 uC;
-void main(){ float y = vUv.y*40.0 + sin(vUv.x*8.0 + uTime*2.0)*1.5 + sin(vUv.x*3.0 - uTime)*2.0; float l = smoothstep(0.08,0.0,abs(fract(y)-0.5)-0.42);
+void main(){ float y = vUv.y*24.0 + sin(vUv.x*8.0 + uTime*2.0)*1.5 + sin(vUv.x*3.0 - uTime)*2.0; float w = fwidth(y); float d = abs(fract(y)-0.5);
+  float l = (1.0 - smoothstep(0.015, 0.015 + w * 1.5, 0.5 - d)) * clamp(1.0 - w * 4.0, 0.0, 1.0);
   float edge = smoothstep(0.0,0.15,vUv.x)*smoothstep(1.0,0.85,vUv.x)*smoothstep(0.0,0.1,vUv.y)*smoothstep(1.0,0.8,vUv.y);
   gl_FragColor = vec4(uC * l * edge * uI, 1.0); }`;
 
@@ -71,7 +72,7 @@ export class LaserSystem {
     const liquid = mode === 2;
     this.sheet.visible = liquid && I > 0.01;
     this.sheet.material.uniforms.uTime.value = t;
-    this.sheet.material.uniforms.uI.value = I * (0.5 + A.bass * 0.8) * 1.4;
+    this.sheet.material.uniforms.uI.value = I * (0.4 + A.bass * 0.6) * 0.9;
     this.sheet.material.uniforms.uC.value.copy(this._color(0, 0, t, pal, beat)).multiplyScalar(2);
     for (const pr of this.projectors) {
       const k = pr.i, n = this.projectors.length, u = n > 1 ? k / (n - 1) : 0.5, side = u * 2 - 1;

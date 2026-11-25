@@ -70,7 +70,7 @@ function tex(name) {
 
 // ---------------------------------------------------------------- shaders
 const SKY_FRAG = `
-varying vec3 vDir; uniform vec3 uTop, uMid, uBot, uSunCol; uniform vec3 uSunDir; uniform float uStars, uAurora, uTime, uSun, uClouds;
+varying vec3 vDir; uniform vec3 uTop, uMid, uBot, uSunCol; uniform vec3 uSunDir; uniform float uStars, uAurora, uTime, uSun, uClouds, uGain;
 float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }
 float n2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); float a=fract(sin(dot(i,vec2(127.1,311.7)))*43758.5); float b=fract(sin(dot(i+vec2(1,0),vec2(127.1,311.7)))*43758.5); float c=fract(sin(dot(i+vec2(0,1),vec2(127.1,311.7)))*43758.5); float d=fract(sin(dot(i+vec2(1,1),vec2(127.1,311.7)))*43758.5); return mix(mix(a,b,f.x),mix(c,d,f.x),f.y); }
 void main(){
@@ -81,7 +81,7 @@ void main(){
     col += mix(vec3(0.1,1.0,0.5), vec3(0.6,0.2,1.0), d.x*0.5+0.5) * band * uAurora; }
   if (uSun > 0.0){ float sd = max(dot(d, normalize(uSunDir)), 0.0); col += uSunCol * (pow(sd, 600.0)*3.0 + pow(sd, 12.0)*0.35) * uSun; }
   if (uClouds > 0.0 && y > 0.0){ float c = n2(d.xz/(y+0.15)*2.0 + uTime*0.01) * n2(d.xz/(y+0.15)*5.0); col = mix(col, uMid*1.4+0.1, c*uClouds*smoothstep(0.0,0.25,y)); }
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col * uGain, 1.0);
 }`;
 const SKY_VERT = `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
 
@@ -107,7 +107,7 @@ class Kit {
     const u = {
       uTop: { value: new THREE.Color(o.top || '#000005') }, uMid: { value: new THREE.Color(o.mid || '#05030f') }, uBot: { value: new THREE.Color(o.bot || '#000000') },
       uSunCol: { value: new THREE.Color(o.sunCol || '#ffb070') }, uSunDir: { value: new THREE.Vector3(...(o.sunDir || [0, 0.1, -1])) },
-      uStars: { value: o.stars || 0 }, uAurora: { value: o.aurora || 0 }, uTime: { value: 0 }, uSun: { value: o.sun || 0 }, uClouds: { value: o.clouds || 0 }
+      uStars: { value: o.stars || 0 }, uAurora: { value: o.aurora || 0 }, uTime: { value: 0 }, uSun: { value: o.sun || 0 }, uClouds: { value: o.clouds || 0 }, uGain: { value: o.gain ?? 0.6 }
     };
     const m = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: u, side: THREE.BackSide, depthWrite: false, fog: false }));
     m.renderOrder = -10;
@@ -361,10 +361,10 @@ export const ENVIRONMENTS = [
     }
   },
   {
-    id: 'playa', name: 'Desert Playa Sunrise', desc: 'Dust, art cars and giant sculptures as dawn breaks.', palette: 'sunset', fog: ['#b07a5a', 0.01], crowd: 900,
+    id: 'playa', name: 'Desert Playa Sunrise', desc: 'Dust, art cars and giant sculptures as dawn breaks.', palette: 'sunset', fog: ['#7a5040', 0.006], crowd: 900,
     area: RECT(-18, 18, -5, 22), bar: { x: 20, z: 18 }, particles: 'sand', fx: { pyro: true, co2: false, fireworks: false }, lights: 14, ambient: 0.6,
     build(k) {
-      k.sky({ top: '#2b3f7a', mid: '#ffb48a', bot: '#c08060', sun: 1.1, sunDir: [0.6, 0.04, -0.8], sunCol: '#ffe0a0' });
+      k.sky({ gain: 0.45, top: '#2b3f7a', mid: '#ffb48a', bot: '#c08060', sun: 1.1, sunDir: [0.6, 0.04, -0.8], sunCol: '#ffe0a0' });
       k.floor({ tex: 'sand', color: '#d8b080', rough: 1, metal: 0, repeat: 40 });
       k.stage({ w: 16, h: 1.4, z: -13, stack: 3 }).ledWall({ shape: 'cube', h: 6, y: 8, z: -15 }).truss({ w: 20, h: 12, z: -14, d: 10, heads: 10, lasers: 6 });
       const rng = k.rng;
@@ -387,7 +387,7 @@ export const ENVIRONMENTS = [
     area: RECT(-11, 11, -6.5, 12), bar: { x: 12, z: 11 }, particles: 'none', fx: { pyro: false, co2: true, fireworks: false }, lights: 14, ambient: 0.18, gridFloor: true,
     build(k) {
       const gridMat = new THREE.ShaderMaterial({ vertexShader: SIMPLE_VERT, uniforms: { uTime: { value: 0 }, uKick: { value: 0 }, uC: { value: new THREE.Color('#00f0ff') }, uC2: { value: new THREE.Color('#ff2bd6') } },
-        fragmentShader: `varying vec2 vUv; uniform float uTime,uKick; uniform vec3 uC,uC2; void main(){ vec2 g = vUv*80.0; vec2 f = abs(fract(g)-0.5); float l = smoothstep(0.47,0.5,max(f.x,f.y)); float pulse = smoothstep(0.02,0.0,abs(fract(length(vUv-vec2(0.5,0.45))*6.0 - uTime*0.5)-0.5)-0.45); gl_FragColor = vec4(mix(uC,uC2,vUv.y)*(l*(0.6+uKick)+pulse*0.6) + vec3(0.01,0.0,0.02), 1.0); }`, toneMapped: false });
+        fragmentShader: `varying vec2 vUv; uniform float uTime,uKick; uniform vec3 uC,uC2; void main(){ vec2 g = vUv*80.0; vec2 w = fwidth(g); vec2 f = abs(fract(g)-0.5); vec2 ln = smoothstep(vec2(0.5)-w*1.5, vec2(0.5), f); float l = max(ln.x, ln.y) * clamp(1.0 - max(w.x,w.y)*2.0, 0.0, 1.0); float pulse = smoothstep(0.02,0.0,abs(fract(length(vUv-vec2(0.5,0.45))*6.0 - uTime*0.5)-0.5)-0.45); gl_FragColor = vec4(mix(uC,uC2,vUv.y)*(l*(0.35+uKick*0.5)+pulse*0.25) + vec3(0.01,0.0,0.02), 1.0); }`, toneMapped: false });
       const gf = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), gridMat); gf.rotation.x = -Math.PI / 2; k.add(gf);
       k.animated.push((t, A, pal) => { gridMat.uniforms.uTime.value = t; gridMat.uniforms.uKick.value = A.kick; gridMat.uniforms.uC.value.copy(pal[0]); gridMat.uniforms.uC2.value.copy(pal[1]); });
       k.room(28, 10, 34, { color: '#0b0b14', z: 1 });
@@ -401,10 +401,10 @@ export const ENVIRONMENTS = [
     area: RECT(-10, 10, -6, 11), bar: { x: 10, z: 10 }, particles: 'snow', fx: { pyro: false, co2: true, fireworks: false }, lights: 10, ambient: 0.4,
     build(k) {
       k.floor({ tex: 'ice', color: '#a8d8ff', rough: 0.15, metal: 0.3, repeat: 20 });
-      const cave = new THREE.Mesh(new THREE.SphereGeometry(26, 24, 16, 0, TAU, 0, Math.PI / 2), k.mat('#6fb6e8', { map: tex('ice'), side: THREE.BackSide, roughness: 0.3, emissive: '#0a2a4a' }));
+      const cave = new THREE.Mesh(new THREE.SphereGeometry(26, 24, 16, 0, TAU, 0, Math.PI / 2), k.mat('#3a6a90', { map: tex('ice'), side: THREE.BackSide, roughness: 0.3, emissive: '#04121e' }));
       cave.scale.set(1, 0.45, 1); k.add(cave);
       k.stage({ w: 11, h: 1, z: -12, color: '#9fd0f0' }).ledWall({ shape: 'flat', w: 11, h: 5, y: 5, z: -15.5 }).truss({ w: 15, h: 8.5, z: -13, d: 8, heads: 8, lasers: 4 });
-      const cm = k.mat('#bfe8ff', { roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.85, emissive: '#2a6aa0' });
+      const cm = k.mat('#8fc8ef', { roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.85, emissive: '#0a2a48' });
       const rng = k.rng;
       for (let i = 0; i < 70; i++) { const a = rng() * TAU, r = 6 + rng() * 17; const c = new THREE.Mesh(new THREE.ConeGeometry(0.2 + rng() * 0.5, 1 + rng() * 3, 5), cm); c.position.set(Math.cos(a) * r, 10.5 - rng() * 1.5, Math.sin(a) * r); c.rotation.x = Math.PI; k.add(c); }
       for (let i = 0; i < 26; i++) { const a = rng() * TAU, r = 18 + rng() * 6; const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.6 + rng() * 1.6), cm); c.position.set(Math.cos(a) * r, 0.8, Math.sin(a) * r); c.scale.y = 2.4; k.add(c); }
@@ -522,7 +522,7 @@ export const ENVIRONMENTS = [
     build(k) {
       k.sky({ top: '#0a0220', mid: '#ff3a8a', bot: '#1a0420', sun: 1.6, sunDir: [0, 0.12, -1], sunCol: '#ffc040', stars: 0.6 });
       const gridMat = new THREE.ShaderMaterial({ vertexShader: SIMPLE_VERT, uniforms: { uTime: { value: 0 }, uKick: { value: 0 } }, toneMapped: false,
-        fragmentShader: `varying vec2 vUv; uniform float uTime,uKick; void main(){ vec2 g = vUv*vec2(60.0,60.0); g.y += uTime*2.0; vec2 f = abs(fract(g)-0.5); float l = smoothstep(0.44,0.5,max(f.x,f.y)); gl_FragColor = vec4(vec3(1.0,0.15,0.8)*l*(1.2+uKick) + vec3(0.04,0.0,0.06), 1.0); }` });
+        fragmentShader: `varying vec2 vUv; uniform float uTime,uKick; void main(){ vec2 g = vUv*vec2(60.0,60.0); g.y += uTime*2.0; vec2 w = fwidth(g); vec2 f = abs(fract(g)-0.5); vec2 ln = smoothstep(vec2(0.5)-w*1.5, vec2(0.5), f); float l = max(ln.x, ln.y) * clamp(1.0 - max(w.x,w.y)*1.5, 0.0, 1.0); gl_FragColor = vec4(vec3(1.0,0.15,0.8)*l*(0.7+uKick*0.6) + vec3(0.04,0.0,0.06), 1.0); }` });
       const gf = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), gridMat); gf.rotation.x = -Math.PI / 2; k.add(gf);
       k.animated.push((t, A) => { gridMat.uniforms.uTime.value = t; gridMat.uniforms.uKick.value = A.kick; });
       k.stage({ w: 12, h: 1, z: -12, color: '#1a1030' }).ledWall({ shape: 'flat', w: 14, h: 6, y: 5.5, z: -15.5 }).truss({ w: 17, h: 9.5, z: -13, d: 8, heads: 10, lasers: 8 });
